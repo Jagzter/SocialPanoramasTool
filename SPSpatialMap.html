@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Map Pro 2D/3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #view-3d canvas { display: block; border-radius: 1rem; }
+        .hide { display: none !important; }
+        input[type="range"] { accent-color: #2563eb; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); }
+        .sidebar-transition { transition: width 0.3s ease; }
+        /* Prevent browser touch gestures from hijacking drags */
+        #svg-map, #view-3d { touch-action: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div class="flex flex-col md:flex-row h-screen overflow-hidden">
+        
+        <!-- Sidebar -->
+        <div class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col shadow-lg z-20 h-1/3 md:h-full overflow-y-auto scrollbar-hide">
+            <div class="p-4 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-lg font-bold flex items-center gap-2 text-slate-800">
+                        <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
+                        Spatial Map Pro
+                        <span class="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 tracking-wide">v3.11</span>
+                    </h1>
+                    <div class="flex items-center gap-1">
+                        <button id="download-pngs" title="Download 2D & 3D PNGs" class="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-all">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i><span>PNG</span>
+                        </button>
+                        <button id="reset-all" title="Reset Map" class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex mt-3 bg-slate-200 p-1 rounded-lg">
+                    <button id="btn-2d" class="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all bg-white shadow text-blue-600">
+                        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> 2D Map
+                    </button>
+                    <button id="btn-3d" class="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all text-slate-500 hover:text-slate-700">
+                        <i data-lucide="box" class="w-3.5 h-3.5"></i> 3D View
+                    </button>
+                </div>
+            </div>
+
+            <!-- World Settings -->
+            <div class="p-4 border-b border-slate-100">
+                <label class="text-[10px] font-bold uppercase text-slate-400 mb-2 block tracking-wider">World Boundary (Radius)</label>
+                <div class="flex gap-2">
+                    <input type="number" id="world-scale-val" value="10" class="w-20 p-2 bg-slate-50 border border-slate-200 rounded text-sm outline-none focus:border-blue-400">
+                    <select id="world-scale-unit" class="flex-1 p-2 bg-slate-50 border border-slate-200 rounded text-sm outline-none">
+                        <option value="m">Meters (m)</option>
+                        <option value="cm">Centimeters (cm)</option>
+                        <option value="ft">Feet (ft)</option>
+                        <option value="in">Inches (in)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 3D Entity Sizing -->
+            <div class="p-4 border-b border-slate-100">
+                <label class="text-[10px] font-bold uppercase text-slate-400 mb-2 block tracking-wider">3D Entity Sizing</label>
+                <div class="flex bg-slate-200 p-1 rounded-lg">
+                    <button id="btn-sizing-constant" class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all bg-white shadow text-blue-600">Constant</button>
+                    <button id="btn-sizing-persp" class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-500 hover:text-slate-700">Perspective</button>
+                </div>
+                <p class="text-[9px] text-slate-400 mt-2">Constant keeps entities the same on-screen size; Perspective lets them shrink with distance (natural depth cue)</p>
+            </div>
+
+            <!-- Entities List -->
+            <div class="p-4 flex-1">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Entities</h2>
+                    <button id="add-figure" class="bg-blue-600 text-white p-1 rounded-md hover:bg-blue-700 shadow-sm transition-colors">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div id="entities-list" class="space-y-2"></div>
+            </div>
+
+            <!-- Map Notes -->
+            <div class="p-4 border-t border-slate-100">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Map Notes</h2>
+                    <button id="add-note" class="bg-amber-500 text-white p-1 rounded-md hover:bg-amber-600 shadow-sm transition-colors">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div id="notes-list" class="space-y-2"></div>
+                <p class="text-[9px] text-slate-400 mt-2">Max 250 characters · Alt+Enter for a new line · drag notes anywhere on the map</p>
+            </div>
+
+            <!-- Edit Panel -->
+            <div id="edit-panel" class="p-4 bg-slate-50 border-t border-slate-200 space-y-4">
+                <h3 class="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                    <i data-lucide="settings-2" class="w-3 h-3"></i> Adjusting: <span id="edit-name-display">Self</span>
+                </h3>
+                
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-[9px] font-bold uppercase text-slate-400 block mb-1">Entity Label</label>
+                        <input type="text" id="input-name" class="w-full p-1.5 border border-slate-200 rounded text-xs outline-none focus:border-blue-400">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[9px] font-bold uppercase text-slate-400 block mb-1">Distance</label>
+                            <input type="number" id="input-dist" step="0.1" class="w-full p-1.5 border border-slate-200 rounded text-xs outline-none">
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-bold uppercase text-slate-400 block mb-1">Height</label>
+                            <input type="number" id="input-height" step="0.1" class="w-full p-1.5 border border-slate-200 rounded text-xs outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-[9px] font-bold uppercase text-slate-400 mb-1">
+                            <span>Clock (0-12): <span id="label-clock">0</span></span>
+                            <span>Facing: <span id="label-rot">0</span>°</span>
+                        </div>
+                        <input type="range" id="input-clock" min="0" max="12" step="0.1" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer mb-2">
+                        <input type="range" id="input-rot" min="0" max="360" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <div>
+                        <label class="text-[9px] font-bold uppercase text-slate-400 block mb-1">Relative Size: <span id="label-size">1</span>x</label>
+                        <input type="range" id="input-size" min="0.2" max="4" step="0.1" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Viewport -->
+        <div id="main-viewport" class="flex-1 relative bg-slate-100">
+            <!-- HUD -->
+            <div class="absolute top-4 left-4 z-10 pointer-events-none">
+                <div class="glass-panel p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 class="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Map View</h4>
+                    <div id="status-mode" class="text-[11px] font-semibold text-slate-600 flex items-center gap-2 uppercase">
+                        <i data-lucide="layers" class="w-3 h-3 text-blue-500"></i> Schematic 2D
+                    </div>
+                    <div id="status-hint" class="text-[10px] text-slate-400 mt-1 normal-case">
+                        Drag body to move &middot; drag nose or halo ring to face &middot; drag handle to resize
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2D View (SVG) -->
+            <div id="view-2d" class="w-full h-full flex items-center justify-center p-8 bg-white">
+                <svg id="svg-map" viewBox="0 0 800 800" class="w-full h-full max-w-[800px] max-h-[800px]">
+                    <g id="svg-grid"></g>
+                    <g id="svg-figures"></g>
+                </svg>
+            </div>
+
+            <!-- 3D View (Three.js) -->
+            <div id="view-3d" class="w-full h-full hide cursor-grab active:cursor-grabbing"></div>
+        </div>
+    </div>
+
+    <script>
+        const UNITS = { cm: 0.01, in: 0.0254, ft: 0.3048, m: 1 };
+        const COLORS = ['#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'];
+        
+        let figures = [
+            { id: 'self', name: 'Self', distance: 0, clock: 0, height: 0, rotation: 0, size: 1, color: '#3b82f6', isSelf: true }
+        ];
+        let notes = []; // { id, text (≤25 chars), wx, wz } — world coords in metres, shared by 2D & 3D
+        let selectedId = 'self';
+        let viewMode = '2D';
+        let worldScale = { value: 10, unit: 'm' };
+
+        let scene, camera, renderer, figuresGroup, notesGroup;
+        let is3DInitialized = false;
+        let renamingId = null; // entity currently being renamed inline
+
+        const getInMeters = (val, unit) => (parseFloat(val) || 0) * (UNITS[unit] || 1);
+        const pxPerMeter = () => 350 / (getInMeters(worldScale.value, worldScale.unit) || 1);
+        const escXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        // Splits note text into display lines: manual line breaks (Alt+Enter)
+        // are honoured, and any line longer than maxChars soft-wraps at words
+        function wrapNoteText(text, maxChars = 30) {
+            const out = [];
+            String(text || '').split('\n').forEach(raw => {
+                let line = '';
+                raw.split(' ').forEach(word => {
+                    while (word.length > maxChars) { // unbroken over-long word
+                        if (line) { out.push(line); line = ''; }
+                        out.push(word.slice(0, maxChars));
+                        word = word.slice(maxChars);
+                    }
+                    if (!line) line = word;
+                    else if ((line + ' ' + word).length <= maxChars) line += ' ' + word;
+                    else { out.push(line); line = word; }
+                });
+                out.push(line);
+            });
+            return out.length ? out : [' '];
+        }
+
+        function safeUpdateIcons() {
+            try {
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (e) { console.warn("Lucide icons not ready yet"); }
+        }
+
+        // Shared updater used by sliders AND drag interactions
+        function updateFigure(id, updates) {
+            const index = figures.findIndex(f => f.id === id);
+            if (index !== -1) {
+                figures[index] = { ...figures[index], ...updates };
+                renderUI();
+            }
+        }
+
+        // Compute a figure's centre in SVG coordinates (used by drag maths)
+        function fig2DCenter(fig) {
+            const maxInMeters = getInMeters(worldScale.value, worldScale.unit) || 1;
+            const pxPerMeter = 350 / maxInMeters;
+            const dist = getInMeters(fig.distance, worldScale.unit);
+            const angle = (fig.clock * 30 - 90) * (Math.PI / 180);
+            return {
+                x: 400 + Math.cos(angle) * (dist * pxPerMeter),
+                y: 400 + Math.sin(angle) * (dist * pxPerMeter)
+            };
+        }
+
+        // Convert a pointer event into SVG viewBox coordinates
+        function svgPoint(e) {
+            const svg = document.getElementById('svg-map');
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            return pt.matrixTransform(svg.getScreenCTM().inverse());
+        }
+
+        // Redraw both map views without rebuilding the sidebar
+        function renderMaps() {
+            render2D();
+            if (viewMode === '3D') update3D();
+        }
+
+        function renderUI() {
+            const elList = document.getElementById('entities-list');
+            if (!elList) return;
+            
+            elList.innerHTML = '';
+            figures.forEach(fig => {
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${selectedId === fig.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-slate-100 bg-white shadow-sm hover:border-slate-200'}`;
+
+                const isRenaming = renamingId === fig.id;
+                const nameHtml = isRenaming
+                    ? `<input type="text" class="rename-input text-xs font-semibold bg-white border border-blue-400 rounded px-1 py-0.5 w-32 outline-none" data-id="${fig.id}" value="${fig.name.replace(/"/g, '&quot;')}" />`
+                    : `<span class="text-xs font-semibold rename-label" data-id="${fig.id}" title="Double-click to rename">${fig.name} ${fig.isSelf ? '(You)' : ''}</span>`;
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full" style="background-color: ${fig.color}"></div>
+                        ${nameHtml}
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button class="rename-btn text-slate-300 hover:text-blue-500" title="Rename" data-id="${fig.id}"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                        ${!fig.isSelf ? `<button class="delete-btn text-slate-300 hover:text-red-500" data-id="${fig.id}"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
+                    </div>
+                `;
+                item.onclick = (e) => {
+                    if (e.target.closest('.delete-btn') || e.target.closest('.rename-btn') || e.target.closest('.rename-input')) return;
+                    selectFigure(fig.id);
+                };
+                elList.appendChild(item);
+            });
+
+            // Rename: pencil button or double-click on the name
+            document.querySelectorAll('.rename-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    startRename(btn.dataset.id);
+                };
+            });
+            document.querySelectorAll('.rename-label').forEach(lbl => {
+                lbl.ondblclick = (e) => {
+                    e.stopPropagation();
+                    startRename(lbl.dataset.id);
+                };
+            });
+            document.querySelectorAll('.rename-input').forEach(inp => {
+                const commit = () => {
+                    const id = inp.dataset.id;
+                    const newName = inp.value.trim();
+                    renamingId = null;
+                    if (newName) {
+                        updateFigure(id, { name: newName });
+                    } else {
+                        renderUI();
+                    }
+                };
+                inp.onclick = (e) => e.stopPropagation();
+                inp.onpointerdown = (e) => e.stopPropagation();
+                inp.onkeydown = (e) => {
+                    if (e.key === 'Enter') { inp.blur(); }
+                    if (e.key === 'Escape') { renamingId = null; renderUI(); }
+                };
+                inp.onblur = commit;
+                // Focus and select existing text so typing replaces it
+                setTimeout(() => { inp.focus(); inp.select(); }, 0);
+            });
+
+            // Add delete event listeners
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    handleDelete(btn.dataset.id);
+                };
+            });
+
+            // --- Map Notes sidebar list ---
+            const notesList = document.getElementById('notes-list');
+            if (notesList) {
+                notesList.innerHTML = '';
+                notes.forEach(note => {
+                    const row = document.createElement('div');
+                    row.className = 'flex items-start gap-2';
+                    row.innerHTML = `
+                        <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-2"></span>
+                        <textarea maxlength="250" rows="2" data-note-id="${note.id}" class="note-input flex-1 p-1.5 border border-slate-200 rounded text-xs outline-none focus:border-amber-400 resize-none" placeholder="Note (max 250 chars)">${escXml(note.text)}</textarea>
+                        <button class="note-delete text-slate-300 hover:text-red-500 shrink-0 mt-1.5" data-note-id="${note.id}"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                    `;
+                    notesList.appendChild(row);
+                });
+                notesList.querySelectorAll('.note-input').forEach(inp => {
+                    // Update the maps only while typing — rebuilding the sidebar
+                    // mid-keystroke would steal focus from the input
+                    inp.oninput = () => {
+                        const note = notes.find(n => n.id === inp.dataset.noteId);
+                        if (note) { note.text = inp.value.slice(0, 250); renderMaps(); }
+                    };
+                    // Alt+Enter inserts a line break; plain Enter just finishes editing
+                    inp.onkeydown = (ev) => {
+                        if (ev.key !== 'Enter') return;
+                        ev.preventDefault();
+                        if (ev.altKey) {
+                            const start = inp.selectionStart, end = inp.selectionEnd;
+                            inp.value = inp.value.slice(0, start) + '\n' + inp.value.slice(end);
+                            inp.selectionStart = inp.selectionEnd = start + 1;
+                            inp.dispatchEvent(new Event('input'));
+                        } else {
+                            inp.blur();
+                        }
+                    };
+                });
+                notesList.querySelectorAll('.note-delete').forEach(btn => {
+                    btn.onclick = () => {
+                        notes = notes.filter(n => n.id !== btn.dataset.noteId);
+                        renderUI();
+                    };
+                });
+            }
+
+            const sel = figures.find(f => f.id === selectedId);
+            if (sel) {
+                document.getElementById('edit-name-display').innerText = sel.name;
+                document.getElementById('input-name').value = sel.name;
+                document.getElementById('input-dist').value = sel.distance;
+                document.getElementById('input-height').value = sel.height;
+                document.getElementById('input-clock').value = sel.clock;
+                document.getElementById('input-rot').value = sel.rotation;
+                document.getElementById('input-size').value = sel.size;
+                document.getElementById('label-clock').innerText = sel.clock;
+                document.getElementById('label-rot').innerText = sel.rotation;
+                document.getElementById('label-size').innerText = sel.size;
+            }
+            
+            render2D();
+            if (viewMode === '3D') update3D();
+            safeUpdateIcons();
+        }
+
+        function render2D() {
+            const svgFigures = document.getElementById('svg-figures');
+            const svgGrid = document.getElementById('svg-grid');
+            if (!svgFigures || !svgGrid) return;
+
+            svgFigures.innerHTML = '';
+            svgGrid.innerHTML = `
+                <circle cx="400" cy="400" r="350" fill="none" stroke="#f1f5f9" stroke-width="2" />
+                <circle cx="400" cy="400" r="233" fill="none" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="5,5" />
+                <circle cx="400" cy="400" r="116" fill="none" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="5,5" />
+                <line x1="400" y1="50" x2="400" y2="750" stroke="#f1f5f9" />
+                <line x1="50" y1="400" x2="750" y2="400" stroke="#f1f5f9" />
+                <text x="400" y="40" text-anchor="middle" class="fill-slate-300 text-[12px] font-bold">12</text>
+                <text x="770" y="405" text-anchor="middle" class="fill-slate-300 text-[12px] font-bold">3</text>
+                <text x="400" y="780" text-anchor="middle" class="fill-slate-300 text-[12px] font-bold">6</text>
+                <text x="30" y="405" text-anchor="middle" class="fill-slate-300 text-[12px] font-bold">9</text>
+            `;
+
+            figures.forEach(fig => {
+                const c = fig2DCenter(fig);
+                const cx = c.x;
+                const cy = c.y;
+                const maxInMeters = getInMeters(worldScale.value, worldScale.unit) || 1;
+                const pxPerMeter = 350 / maxInMeters;
+                const s = fig.size * 15;
+                const shadow = fig.height * pxPerMeter * 0.1;
+
+                const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                g.onclick = (e) => { e.stopPropagation(); selectFigure(fig.id); };
+
+                let html = '';
+                if (selectedId === fig.id) {
+                    html += `<circle cx="${cx}" cy="${cy}" r="${s + 15}" fill="${fig.color}" fill-opacity="0.1" stroke="${fig.color}" stroke-dasharray="2,2" pointer-events="none" />`;
+                }
+                html += `
+                    <circle cx="${cx + shadow}" cy="${cy + shadow}" r="${s}" fill="black" fill-opacity="0.1" pointer-events="none" />
+                    <g transform="translate(${cx}, ${cy}) rotate(${fig.rotation})">
+                        <circle r="${s}" fill="${fig.color}" stroke="white" stroke-width="2" data-id="${fig.id}" data-part="move" style="cursor: move;" />
+                        <path d="M ${-s/2} ${-s*0.8} L ${s/2} ${-s*0.8} L 0 ${-s*1.8} Z" fill="${fig.color}" stroke="white" stroke-width="1.5" data-id="${fig.id}" data-part="rotate" style="cursor: alias;" />
+                    </g>
+                `;
+
+                // The selection halo itself is also grabbable for rotation: an
+                // invisible thick ring along the dashed circle (stroke hits only,
+                // so the body inside stays free for move-drags)
+                if (selectedId === fig.id) {
+                    html += `<circle cx="${cx}" cy="${cy}" r="${s + 15}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" data-id="${fig.id}" data-part="rotate" style="cursor: alias;" />`;
+                }
+
+                // Label placed on the OPPOSITE side to the nose, clear of the body,
+                // halo and size handle — so the nose is always visible and draggable
+                const noseDx = Math.sin(fig.rotation * Math.PI / 180);
+                const noseDy = -Math.cos(fig.rotation * Math.PI / 180);
+                const labelR = s + (selectedId === fig.id ? 36 : 20);
+                const lx = cx - noseDx * labelR;
+                const ly = cy - noseDy * labelR;
+                html += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" class="fill-slate-500 font-bold text-[10px] uppercase tracking-tighter" pointer-events="none">${fig.name}</text>`;
+
+                // Size handle on the selection halo (bottom-right) — drag to resize
+                if (selectedId === fig.id) {
+                    const hr = s + 15;
+                    const hx = cx + hr * Math.cos(Math.PI / 4);
+                    const hy = cy + hr * Math.sin(Math.PI / 4);
+                    html += `<rect x="${hx - 6}" y="${hy - 6}" width="12" height="12" rx="3" fill="white" stroke="${fig.color}" stroke-width="2" data-id="${fig.id}" data-part="size" style="cursor: nwse-resize;" />`;
+                }
+
+                g.innerHTML = html;
+                svgFigures.appendChild(g);
+            });
+
+            // --- Map notes: amber sticky-style boxes, draggable anywhere ---
+            const k = pxPerMeter();
+            notes.forEach(note => {
+                const lines = wrapNoteText(note.text);
+                const nx = 400 + note.wx * k;
+                const ny = 400 + note.wz * k;
+                const maxLen = Math.max(1, ...lines.map(l => l.length));
+                const w = Math.max(46, maxLen * 6.4 + 20);
+                const lineH = 14;
+                const nh = lines.length * lineH + 10;
+                const firstY = ny - ((lines.length - 1) * lineH) / 2 + 1;
+                const tspans = lines.map((l, i) =>
+                    `<tspan x="${nx - w/2 + 10}" y="${firstY + i * lineH}">${l === '' ? '\u00A0' : escXml(l)}</tspan>`
+                ).join('');
+                const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                g.innerHTML = `
+                    <rect x="${nx - w/2 + 1.5}" y="${ny - nh/2 + 1.5}" width="${w}" height="${nh}" rx="6" fill="black" fill-opacity="0.08" pointer-events="none" />
+                    <rect x="${nx - w/2}" y="${ny - nh/2}" width="${w}" height="${nh}" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" data-note-id="${note.id}" data-part="note" style="cursor: move;" />
+                    <text text-anchor="start" dominant-baseline="middle" font-size="11" font-weight="600" fill="#92400e" pointer-events="none" style="font-family: Inter, Helvetica, sans-serif;">${tspans}</text>
+                `;
+                svgFigures.appendChild(g);
+            });
+        }
+
+        // ---------- 2D DRAG INTERACTIONS ----------
+        function init2DDrag() {
+            const svg = document.getElementById('svg-map');
+            let drag = null; // { id, mode: 'move' | 'rotate' | 'size' }
+
+            svg.addEventListener('pointerdown', (e) => {
+                const target = e.target.closest ? e.target.closest('[data-part]') : null;
+                if (!target) return;
+                e.preventDefault();
+                const partType = target.getAttribute('data-part');
+                if (partType === 'note') {
+                    drag = { mode: 'note', noteId: target.getAttribute('data-note-id') };
+                    try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+                    return;
+                }
+                const id = target.getAttribute('data-id');
+                if (selectedId !== id) selectFigure(id);
+                drag = { id, mode: partType };
+                try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+            });
+
+            svg.addEventListener('pointermove', (e) => {
+                if (!drag) return;
+                e.preventDefault();
+                const p = svgPoint(e);
+
+                if (drag.mode === 'note') {
+                    // Note drag → free placement anywhere on the map canvas
+                    const note = notes.find(n => n.id === drag.noteId);
+                    if (!note) { drag = null; return; }
+                    const k = pxPerMeter();
+                    const x = Math.max(15, Math.min(785, p.x));
+                    const y = Math.max(15, Math.min(785, p.y));
+                    note.wx = (x - 400) / k;
+                    note.wz = (y - 400) / k;
+                    renderMaps();
+                    return;
+                }
+
+                const fig = figures.find(f => f.id === drag.id);
+                if (!fig) { drag = null; return; }
+
+                if (drag.mode === 'move') {
+                    // Position drag → updates Distance + Clock together
+                    const dx = p.x - 400;
+                    const dy = p.y - 400;
+                    const distPx = Math.min(Math.hypot(dx, dy), 350);
+                    const distance = Math.round((distPx * worldScale.value / 350) * 10) / 10;
+                    let clock = ((Math.atan2(dy, dx) * 180 / Math.PI + 90) / 30 + 12) % 12;
+                    clock = Math.round(clock * 10) / 10;
+                    updateFigure(drag.id, { distance, clock });
+
+                } else if (drag.mode === 'rotate') {
+                    // Nose drag → updates Facing rotation
+                    const c = fig2DCenter(fig);
+                    const rotation = Math.round((Math.atan2(p.y - c.y, p.x - c.x) * 180 / Math.PI + 90 + 360) % 360);
+                    updateFigure(drag.id, { rotation });
+
+                } else if (drag.mode === 'size') {
+                    // Handle drag → updates Relative Size
+                    const c = fig2DCenter(fig);
+                    const d = Math.hypot(p.x - c.x, p.y - c.y);
+                    const size = Math.max(0.2, Math.min(4, Math.round(((d - 15) / 15) * 10) / 10));
+                    updateFigure(drag.id, { size });
+                }
+            });
+
+            const endDrag = () => { drag = null; };
+            svg.addEventListener('pointerup', endDrag);
+            svg.addEventListener('pointercancel', endDrag);
+            svg.addEventListener('pointerleave', (e) => { if (!svg.hasPointerCapture || !svg.hasPointerCapture(e.pointerId)) endDrag(); });
+        }
+
+        // ---------- SCREEN-SPACE SIZE COMPENSATION ----------
+        // Reference camera distance at which everything renders at base size.
+        // Notes are always counter-scaled to constant on-screen size; entity
+        // visuals follow the sidebar's "3D Entity Sizing" toggle.
+        const SCREEN_REF_DIST = 25;
+        let entitySizing = 'constant'; // 'constant' | 'perspective'
+
+        function applyScreenSpaceScaling() {
+            if (!camera) return;
+            if (notesGroup) {
+                notesGroup.children.forEach(sp => {
+                    if (sp.userData.baseW) {
+                        const f = sp.position.distanceTo(camera.position) / SCREEN_REF_DIST;
+                        sp.scale.set(sp.userData.baseW * f, sp.userData.baseH * f, 1);
+                    }
+                });
+            }
+            if (figuresGroup) {
+                figuresGroup.children.forEach(g => {
+                    const v = g.children.find(c => c.userData && c.userData.scaleComp);
+                    if (v) {
+                        const f = entitySizing === 'constant'
+                            ? g.position.distanceTo(camera.position) / SCREEN_REF_DIST
+                            : 1;
+                        v.scale.setScalar(f);
+                    }
+                });
+            }
+        }
+
+        function init3D() {
+            if (is3DInitialized) return;
+            const container = document.getElementById('view-3d');
+            if (!container) return;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf8fafc);
+            
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / (container.clientHeight || 1), 0.1, 1000);
+            camera.position.set(15, 15, 15);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const directional = new THREE.DirectionalLight(0xffffff, 0.8);
+            directional.position.set(10, 20, 10);
+            scene.add(directional);
+
+            scene.add(new THREE.GridHelper(100, 50, 0xe2e8f0, 0xf1f5f9));
+            figuresGroup = new THREE.Group();
+            scene.add(figuresGroup);
+            notesGroup = new THREE.Group();
+            scene.add(notesGroup);
+
+            let theta = Math.PI / 4, phi = Math.PI / 4, radius = 25, isDragging = false;
+            const updateCam = () => {
+                camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
+                camera.position.y = radius * Math.cos(phi);
+                camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
+                camera.lookAt(0, 0, 0);
+            };
+
+            // ---------- 3D DRAG INTERACTIONS ----------
+            const raycaster = new THREE.Raycaster();
+            const mouseNDC = new THREE.Vector2();
+            let drag3D = null; // { id, mode: 'move' | 'rotate', startX, startRot }
+
+            const setNDC = (e) => {
+                const rect = renderer.domElement.getBoundingClientRect();
+                mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            };
+
+            container.addEventListener('pointerdown', (e) => {
+                setNDC(e);
+                raycaster.setFromCamera(mouseNDC, camera);
+                const hits = raycaster.intersectObjects([...figuresGroup.children, ...notesGroup.children], true);
+                if (hits.length > 0) {
+                    // Resolve a hit to what it belongs to (gizmo part / note / figure)
+                    const resolve = (hit) => {
+                        let part = null, id = null, noteId = null;
+                        const proxy = !!(hit.object.userData && hit.object.userData.hitProxy);
+                        let obj = hit.object;
+                        while (obj) {
+                            if (!part && obj.userData && obj.userData.part) part = obj.userData.part;
+                            if (obj.userData && obj.userData.noteId) { noteId = obj.userData.noteId; break; }
+                            if (obj.userData && obj.userData.figId) { id = obj.userData.figId; break; }
+                            obj = obj.parent;
+                        }
+                        return { part, id, noteId, proxy };
+                    };
+                    // Invisible helper zones (lift handle / ring) are PROXIES: they
+                    // only win if nothing visible sits behind them on the same ray.
+                    // This keeps body-drags (lateral movement) working from any angle.
+                    let pick = resolve(hits[0]);
+                    if (pick.proxy) {
+                        for (let i = 1; i < hits.length; i++) {
+                            const r2 = resolve(hits[i]);
+                            if (!r2.proxy) { pick = r2; break; }
+                        }
+                    }
+                    if (pick.noteId) {
+                        drag3D = { noteId: pick.noteId, mode: 'note' };
+                        try { container.setPointerCapture(e.pointerId); } catch (err) {}
+                        e.preventDefault();
+                        return;
+                    }
+                    if (pick.id) {
+                        const part = pick.part;
+                        const id = pick.id;
+                        if (selectedId !== id) selectFigure(id);
+                        const fig = figures.find(f => f.id === id);
+                        if (part === 'lift' || e.altKey) {
+                            drag3D = { id, mode: 'height' };           // lift handle or Alt+drag → height
+                        } else if (part === 'size') {
+                            drag3D = { id, mode: 'size3d' };           // ring cube → resize
+                        } else if (part === 'rotate') {
+                            drag3D = { id, mode: 'spin' };             // selection ring → point nose at cursor
+                        } else if (e.shiftKey) {
+                            drag3D = { id, mode: 'rotate', startX: e.clientX, startRot: fig.rotation };
+                        } else {
+                            drag3D = { id, mode: 'move' };
+                        }
+                        try { container.setPointerCapture(e.pointerId); } catch (err) {}
+                        e.preventDefault();
+                        return;
+                    }
+                }
+                isDragging = true; // empty space → orbit camera
+            });
+
+            container.addEventListener('pointermove', (e) => {
+                if (!drag3D) return;
+
+                if (drag3D.mode === 'note') {
+                    // Note drag → slide along the ground plane
+                    const note = notes.find(n => n.id === drag3D.noteId);
+                    if (!note) { drag3D = null; return; }
+                    setNDC(e);
+                    raycaster.setFromCamera(mouseNDC, camera);
+                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                    const pt = new THREE.Vector3();
+                    if (raycaster.ray.intersectPlane(plane, pt)) {
+                        const maxM = getInMeters(worldScale.value, worldScale.unit) || 1;
+                        const lim = maxM * 1.15;
+                        note.wx = Math.max(-lim, Math.min(lim, pt.x));
+                        note.wz = Math.max(-lim, Math.min(lim, pt.z));
+                        renderMaps();
+                    }
+                    return;
+                }
+
+                const fig = figures.find(f => f.id === drag3D.id);
+                if (!fig) { drag3D = null; return; }
+
+                if (drag3D.mode === 'move') {
+                    // Drag on the figure's height plane → Distance + Clock
+                    setNDC(e);
+                    raycaster.setFromCamera(mouseNDC, camera);
+                    const h = getInMeters(fig.height, worldScale.unit);
+                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -h);
+                    const pt = new THREE.Vector3();
+                    if (raycaster.ray.intersectPlane(plane, pt)) {
+                        const distM = Math.hypot(pt.x, pt.z);
+                        const maxM = getInMeters(worldScale.value, worldScale.unit) || 1;
+                        const clampedM = Math.min(distM, maxM);
+                        const distance = Math.round((clampedM / (UNITS[worldScale.unit] || 1)) * 10) / 10;
+                        let clock = ((Math.atan2(pt.x, -pt.z) * 180 / Math.PI) / 30 + 12) % 12;
+                        clock = Math.round(clock * 10) / 10;
+                        updateFigure(drag3D.id, { distance, clock });
+                    }
+                } else if (drag3D.mode === 'height') {
+                    // Vertical drag → Height. Project the pointer onto a camera-facing
+                    // vertical plane through the figure's ground position, take its Y.
+                    setNDC(e);
+                    raycaster.setFromCamera(mouseNDC, camera);
+                    const angle = (fig.clock * 30) * (Math.PI / 180);
+                    const dist = getInMeters(fig.distance, worldScale.unit);
+                    const groundPos = new THREE.Vector3(Math.sin(angle) * dist, 0, -Math.cos(angle) * dist);
+                    const n = new THREE.Vector3();
+                    camera.getWorldDirection(n);
+                    n.y = 0;
+                    if (n.lengthSq() < 1e-6) n.set(0, 0, 1);
+                    n.normalize();
+                    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, groundPos);
+                    const pt = new THREE.Vector3();
+                    if (raycaster.ray.intersectPlane(plane, pt)) {
+                        const maxM = getInMeters(worldScale.value, worldScale.unit) || 1;
+                        const hM = Math.max(-maxM, Math.min(maxM, pt.y));
+                        const height = Math.round((hM / (UNITS[worldScale.unit] || 1)) * 10) / 10;
+                        updateFigure(drag3D.id, { height });
+                    }
+                } else if (drag3D.mode === 'size3d') {
+                    // Size-handle drag → distance from the figure's axis maps to
+                    // Relative Size (handle sits on the ring at radius 0.66 × size)
+                    setNDC(e);
+                    raycaster.setFromCamera(mouseNDC, camera);
+                    const h = getInMeters(fig.height, worldScale.unit);
+                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(h - 0.49 * fig.size));
+                    const pt = new THREE.Vector3();
+                    if (raycaster.ray.intersectPlane(plane, pt)) {
+                        const angle = (fig.clock * 30) * (Math.PI / 180);
+                        const dist = getInMeters(fig.distance, worldScale.unit);
+                        const fx = Math.sin(angle) * dist;
+                        const fz = -Math.cos(angle) * dist;
+                        const d = Math.hypot(pt.x - fx, pt.z - fz);
+                        // The handle is drawn scale-compensated in Constant mode,
+                        // so undo that factor before mapping drag distance to size
+                        const fcomp = entitySizing === 'constant'
+                            ? new THREE.Vector3(fx, h, fz).distanceTo(camera.position) / SCREEN_REF_DIST
+                            : 1;
+                        const size = Math.max(0.2, Math.min(4, Math.round((d / (0.66 * (fcomp || 1))) * 10) / 10));
+                        updateFigure(drag3D.id, { size });
+                    }
+                } else if (drag3D.mode === 'spin') {
+                    // Ring drag → point the nose at the cursor (same feel as 2D nose drag)
+                    setNDC(e);
+                    raycaster.setFromCamera(mouseNDC, camera);
+                    const h = getInMeters(fig.height, worldScale.unit);
+                    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -h);
+                    const pt = new THREE.Vector3();
+                    if (raycaster.ray.intersectPlane(plane, pt)) {
+                        const angle = (fig.clock * 30) * (Math.PI / 180);
+                        const dist = getInMeters(fig.distance, worldScale.unit);
+                        const fx = Math.sin(angle) * dist;
+                        const fz = -Math.cos(angle) * dist;
+                        const rotation = Math.round((Math.atan2(pt.x - fx, -(pt.z - fz)) * 180 / Math.PI + 360) % 360);
+                        updateFigure(drag3D.id, { rotation });
+                    }
+                } else {
+                    // Shift + horizontal drag → Facing rotation
+                    const rotation = (((drag3D.startRot + Math.round((e.clientX - drag3D.startX) * 0.5)) % 360) + 360) % 360;
+                    updateFigure(drag3D.id, { rotation });
+                }
+            });
+
+            const end3DDrag = () => { drag3D = null; isDragging = false; };
+            container.addEventListener('pointerup', end3DDrag);
+            container.addEventListener('pointercancel', end3DDrag);
+            
+            window.addEventListener('mouseup', () => isDragging = false);
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging || drag3D || viewMode !== '3D') return;
+                theta -= e.movementX * 0.01;
+                phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, phi + e.movementY * 0.01));
+                updateCam();
+            });
+            container.onwheel = (e) => {
+                if (viewMode !== '3D') return;
+                radius = Math.max(5, Math.min(150, radius + e.deltaY * 0.05));
+                updateCam();
+            };
+
+            function animate() {
+                requestAnimationFrame(animate);
+                applyScreenSpaceScaling();
+                if (renderer) renderer.render(scene, camera);
+            }
+            animate();
+            is3DInitialized = true;
+            update3D();
+        }
+
+        // Creates a camera-facing name label for the 3D view using a canvas sprite
+        function makeLabelSprite(text, worldR) {
+            const fontSize = 48;
+            const padX = 24, padY = 14;
+            const canvas = document.createElement('canvas');
+            let ctx = canvas.getContext('2d');
+            ctx.font = `700 ${fontSize}px Inter, sans-serif`;
+            const label = text.toUpperCase();
+            const textW = ctx.measureText(label).width;
+            canvas.width = Math.max(2, Math.ceil(textW + padX * 2));
+            canvas.height = fontSize + padY * 2;
+
+            ctx = canvas.getContext('2d');
+            // Pill background
+            const r = canvas.height / 2;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(canvas.width - r, 0);
+            ctx.arc(canvas.width - r, r, r, -Math.PI / 2, Math.PI / 2);
+            ctx.lineTo(r, canvas.height);
+            ctx.arc(r, r, r, Math.PI / 2, -Math.PI / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(226, 232, 240, 1)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            // Text
+            ctx.font = `700 ${fontSize}px Inter, sans-serif`;
+            ctx.fillStyle = '#475569';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, canvas.width / 2, canvas.height / 2 + 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(material);
+            // 2D-parity scale (the +30% boost made these match the original
+            // oversized labels, so entity names are back at parity; note
+            // boxes keep the larger scale as they carry more text)
+            const scalePerPx = Math.max(0.0013, (worldR || 10) * 0.000595);
+            sprite.scale.set(canvas.width * scalePerPx, canvas.height * scalePerPx, 1);
+            sprite.userData.pillH = canvas.height * scalePerPx;
+            sprite.renderOrder = 999;
+            return sprite;
+        }
+
+        // Creates a camera-facing amber note pill for the 3D view (multiline)
+        function makeNoteSprite(text, worldR) {
+            const lines = wrapNoteText(text);
+            const fontSize = 48, lineH = 58;
+            const padX = 26, padY = 16;
+            const canvas = document.createElement('canvas');
+            let ctx = canvas.getContext('2d');
+            ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+            let maxW = 0;
+            lines.forEach(l => { maxW = Math.max(maxW, ctx.measureText(l || ' ').width); });
+            canvas.width = Math.max(2, Math.ceil(maxW + padX * 2));
+            canvas.height = lines.length * lineH + padY * 2;
+
+            ctx = canvas.getContext('2d');
+            const r = Math.min(18, canvas.height / 2);
+            ctx.fillStyle = 'rgba(255, 251, 235, 0.95)';
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(r, 2);
+            ctx.lineTo(canvas.width - r, 2);
+            ctx.arcTo(canvas.width - 2, 2, canvas.width - 2, r, r);
+            ctx.lineTo(canvas.width - 2, canvas.height - r);
+            ctx.arcTo(canvas.width - 2, canvas.height - 2, canvas.width - r, canvas.height - 2, r);
+            ctx.lineTo(r, canvas.height - 2);
+            ctx.arcTo(2, canvas.height - 2, 2, canvas.height - r, r);
+            ctx.lineTo(2, r);
+            ctx.arcTo(2, 2, r, 2, r);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+            ctx.fillStyle = '#92400e';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            lines.forEach((l, i) => {
+                ctx.fillText(l || ' ', padX, padY + lineH * i + lineH / 2 + 2);
+            });
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+            // Same 30%-boosted proportional scale as the entity name labels
+            const scalePerPx = Math.max(0.0017, (worldR || 10) * 0.000774);
+            sprite.scale.set(canvas.width * scalePerPx, canvas.height * scalePerPx, 1);
+            // Base scale stored for per-frame distance compensation, which keeps
+            // notes a constant on-screen size wherever they sit in the scene
+            sprite.userData.baseW = canvas.width * scalePerPx;
+            sprite.userData.baseH = canvas.height * scalePerPx;
+            sprite.renderOrder = 996;
+            return sprite;
+        }
+
+        // ---------- 3D CLOCK FACE ----------
+        let clockGroup = null;
+        let lastClockRadius = null;
+
+        // Small camera-facing number sprite for the clock hours
+        function makeClockNumberSprite(text, worldR) {
+            const fontSize = 64;
+            const canvas = document.createElement('canvas');
+            let ctx = canvas.getContext('2d');
+            ctx.font = `800 ${fontSize}px Inter, sans-serif`;
+            const w = Math.max(2, Math.ceil(ctx.measureText(text).width + 20));
+            canvas.width = w;
+            canvas.height = fontSize + 20;
+            ctx = canvas.getContext('2d');
+            ctx.font = `800 ${fontSize}px Inter, sans-serif`;
+            ctx.fillStyle = '#94a3b8';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+            const scalePerPx = (worldR * 0.0016);
+            sprite.scale.set(canvas.width * scalePerPx, canvas.height * scalePerPx, 1);
+            sprite.renderOrder = 500;
+            return sprite;
+        }
+
+        function buildClockFace() {
+            if (!scene) return;
+            const maxM = getInMeters(worldScale.value, worldScale.unit) || 1;
+            if (clockGroup && lastClockRadius === maxM) return; // only rebuild when the world radius changes
+            if (clockGroup) scene.remove(clockGroup);
+            clockGroup = new THREE.Group();
+            lastClockRadius = maxM;
+
+            const circlePoints = (r) => {
+                const pts = [];
+                for (let i = 0; i <= 96; i++) {
+                    const a = (i / 96) * Math.PI * 2;
+                    pts.push(new THREE.Vector3(Math.cos(a) * r, 0.02, Math.sin(a) * r));
+                }
+                return pts;
+            };
+
+            // Outer boundary ring (solid) — matches the 2D world boundary circle
+            const outer = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(circlePoints(maxM)),
+                new THREE.LineBasicMaterial({ color: 0xcbd5e1 })
+            );
+            clockGroup.add(outer);
+
+            // Two inner rings (dashed) — matches the 2D thirds rings
+            [maxM * 2 / 3, maxM / 3].forEach(r => {
+                const ring = new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints(circlePoints(r)),
+                    new THREE.LineDashedMaterial({ color: 0xe2e8f0, dashSize: maxM * 0.03, gapSize: maxM * 0.03 })
+                );
+                ring.computeLineDistances();
+                clockGroup.add(ring);
+            });
+
+            // Hour spokes every 30°, with 12/3/6/9 slightly stronger
+            for (let h = 0; h < 12; h++) {
+                const a = (h * 30) * Math.PI / 180;
+                const x = Math.sin(a), z = -Math.cos(a);
+                const isCardinal = h % 3 === 0;
+                const spoke = new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(x * maxM * (isCardinal ? 0 : 0.85), 0.02, z * maxM * (isCardinal ? 0 : 0.85)),
+                        new THREE.Vector3(x * maxM, 0.02, z * maxM)
+                    ]),
+                    new THREE.LineBasicMaterial({ color: isCardinal ? 0xcbd5e1 : 0xe2e8f0 })
+                );
+                clockGroup.add(spoke);
+            }
+
+            // Hour numbers just outside the boundary, matching clock-position maths
+            for (let h = 0; h < 12; h++) {
+                const a = (h * 30) * Math.PI / 180;
+                const R = maxM * 1.08;
+                const label = makeClockNumberSprite(String(h === 0 ? 12 : h), maxM);
+                label.position.set(Math.sin(a) * R, 0.05, -Math.cos(a) * R);
+                clockGroup.add(label);
+            }
+
+            scene.add(clockGroup);
+        }
+
+        // ---------- 3D HUMANOID FIGURINE ----------
+        // Builds a small person from primitives (r128-safe: no CapsuleGeometry).
+        // Local space: feet at y = -0.5*s, top of head ≈ y = +0.87*s, facing -Z.
+        function buildFigurine(fig) {
+            const s = fig.size;
+            const isSel = selectedId === fig.id;
+            const mat = new THREE.MeshPhongMaterial({
+                color: fig.color,
+                emissive: isSel ? fig.color : 0x000000,
+                emissiveIntensity: 0.2,
+                shininess: 40
+            });
+
+            const figurine = new THREE.Group();
+
+            // Legs
+            [-0.115, 0.115].forEach(x => {
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.085 * s, 0.105 * s, 0.46 * s, 12), mat);
+                leg.position.set(x * s, -0.27 * s, 0);
+                figurine.add(leg);
+                const foot = new THREE.Mesh(new THREE.SphereGeometry(0.105 * s, 12, 8), mat);
+                foot.position.set(x * s, -0.47 * s, -0.02 * s);
+                foot.scale.set(1, 0.5, 1.4);
+                figurine.add(foot);
+            });
+
+            // Torso (tapered) + rounded shoulders
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17 * s, 0.24 * s, 0.52 * s, 16), mat);
+            torso.position.y = 0.22 * s;
+            figurine.add(torso);
+            const shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.17 * s, 16, 12), mat);
+            shoulders.position.y = 0.48 * s;
+            shoulders.scale.set(1, 0.7, 1);
+            figurine.add(shoulders);
+
+            // Arms, slightly flared from the shoulders
+            [-1, 1].forEach(side => {
+                const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.06 * s, 0.42 * s, 10), mat);
+                arm.position.set(side * 0.265 * s, 0.26 * s, 0);
+                arm.rotation.z = side * 0.16;
+                figurine.add(arm);
+                const hand = new THREE.Mesh(new THREE.SphereGeometry(0.06 * s, 10, 8), mat);
+                hand.position.set(side * 0.30 * s, 0.05 * s, 0);
+                figurine.add(hand);
+            });
+
+            // Head + small nose showing the facing direction (forward = -Z)
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.165 * s, 24, 18), mat);
+            head.position.y = 0.70 * s;
+            figurine.add(head);
+            const nose = new THREE.Mesh(new THREE.ConeGeometry(0.05 * s, 0.16 * s, 10), mat);
+            nose.position.set(0, 0.70 * s, -0.20 * s);
+            nose.rotation.x = -Math.PI / 2;
+            figurine.add(nose);
+
+            // The whole body turns to the Facing value.
+            // Negative sign keeps 3D facing consistent with the 2D map
+            // (90° = towards 3 o'clock in both views).
+            figurine.rotation.y = -(fig.rotation * Math.PI) / 180;
+            return figurine;
+        }
+
+        function update3D() {
+            if (!figuresGroup) return;
+            buildClockFace();
+            while (figuresGroup.children.length > 0) figuresGroup.remove(figuresGroup.children[0]);
+            if (notesGroup) while (notesGroup.children.length > 0) notesGroup.remove(notesGroup.children[0]);
+
+            const maxM = getInMeters(worldScale.value, worldScale.unit) || 1;
+            const placedLabels = []; // for collision-aware label stacking
+
+            // --- Map notes: amber pills hovering just above the ground ---
+            if (notesGroup) {
+                notes.forEach(note => {
+                    const sp = makeNoteSprite(note.text, maxM);
+                    sp.userData.noteId = note.id;
+                    sp.position.set(note.wx, Math.max(0.15, maxM * 0.03), note.wz);
+                    notesGroup.add(sp);
+                });
+            }
+
+            figures.forEach(fig => {
+                const dist = getInMeters(fig.distance, worldScale.unit);
+                const h = getInMeters(fig.height, worldScale.unit);
+                const angle = (fig.clock * 30) * (Math.PI / 180);
+                
+                const group = new THREE.Group();
+                group.userData.figId = fig.id;
+                group.position.set(Math.sin(angle) * dist, h, -Math.cos(angle) * dist);
+
+                // Everything that should hold a constant on-screen size lives in
+                // `visuals` (counter-scaled per frame vs camera distance); ground
+                // anchors like the drop line stay in true world space on `group`
+                const visuals = new THREE.Group();
+                visuals.userData.scaleComp = true;
+                group.add(visuals);
+
+                // Humanoid figurine (replaces the old sphere + cone)
+                visuals.add(buildFigurine(fig));
+
+                if (selectedId === fig.id) {
+                    const ring = new THREE.Mesh(
+                        new THREE.RingGeometry(0.5 * fig.size, 0.66 * fig.size, 32),
+                        new THREE.MeshBasicMaterial({ color: fig.color, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+                    );
+                    ring.rotation.x = Math.PI / 2;
+                    ring.position.y = -0.49 * fig.size;
+                    ring.userData.part = 'rotate';
+                    visuals.add(ring);
+
+                    // Invisible wider ring = generous grab target for rotation
+                    const ringHit = new THREE.Mesh(
+                        new THREE.RingGeometry(0.42 * fig.size, 0.8 * fig.size, 24),
+                        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })
+                    );
+                    ringHit.rotation.x = Math.PI / 2;
+                    ringHit.position.y = -0.49 * fig.size;
+                    ringHit.userData.part = 'rotate';
+                    ringHit.userData.hitProxy = true;
+                    visuals.add(ringHit);
+
+                    // --- Size handle: small cube on the ring (45°) — drag in/out to resize ---
+                    const sk = fig.size;
+                    const hd = 0.66 * sk * Math.SQRT1_2; // ring radius projected to x/z at 45°
+                    const sizeHandle = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.16 * sk, 0.16 * sk, 0.16 * sk),
+                        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthTest: false })
+                    );
+                    const sizeHandleEdge = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.2 * sk, 0.2 * sk, 0.2 * sk),
+                        new THREE.MeshBasicMaterial({ color: fig.color, transparent: true, opacity: 0.9, depthTest: false })
+                    );
+                    sizeHandleEdge.renderOrder = 996;
+                    sizeHandle.renderOrder = 997;
+                    // Invisible larger cube = generous touch target (proxy: never steals body clicks)
+                    const sizeHit = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.45 * sk, 0.45 * sk, 0.45 * sk),
+                        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+                    );
+                    sizeHit.userData.hitProxy = true;
+                    [sizeHandle, sizeHandleEdge, sizeHit].forEach(mh => {
+                        mh.userData.part = 'size';
+                        mh.position.set(hd, -0.49 * sk, hd);
+                        visuals.add(mh);
+                    });
+
+                    // --- Lift handle (vertical double-arrow) — drag to change Height ---
+                    const s = fig.size;
+                    const gz = new THREE.Group();
+                    const gmat = new THREE.MeshBasicMaterial({ color: fig.color, transparent: true, opacity: 0.9, depthTest: false });
+                    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * s, 0.035 * s, 0.55 * s, 8), gmat);
+                    const upArrow = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.2 * s, 10), gmat);
+                    upArrow.position.y = 0.375 * s;
+                    const downArrow = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.2 * s, 10), gmat);
+                    downArrow.position.y = -0.375 * s;
+                    downArrow.rotation.x = Math.PI;
+                    // Invisible fat cylinder to give the handle a generous touch/click target
+                    const hitZone = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.16 * s, 0.16 * s, 1.0 * s, 8),
+                        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+                    );
+                    hitZone.userData.hitProxy = true;
+                    [shaft, upArrow, downArrow, hitZone].forEach(m => {
+                        m.userData.part = 'lift';
+                        m.renderOrder = 997;
+                        gz.add(m);
+                    });
+                    gz.position.set(0.62 * s, 0.2 * s, 0);
+                    visuals.add(gz);
+                }
+
+                // Dashed drop line + ground marker so elevated figures read clearly
+                if (Math.abs(h) > 0.001) {
+                    const drop = new THREE.Line(
+                        new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(0, 0, 0),
+                            new THREE.Vector3(0, -h, 0)
+                        ]),
+                        new THREE.LineDashedMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5, dashSize: Math.max(0.08, maxM * 0.015), gapSize: Math.max(0.06, maxM * 0.012) })
+                    );
+                    drop.computeLineDistances();
+                    group.add(drop);
+                    const disc = new THREE.Mesh(
+                        new THREE.CircleGeometry(0.14 * fig.size, 16),
+                        new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+                    );
+                    disc.rotation.x = -Math.PI / 2;
+                    disc.position.y = -h + 0.01;
+                    group.add(disc);
+                }
+
+                // --- Name label with anti-overlap stacking + leader line ---
+                const px = Math.sin(angle) * dist;
+                const pz = -Math.cos(angle) * dist;
+
+                const labelText = fig.name + (fig.isSelf ? ' (You)' : '');
+                const labelSprite = makeLabelSprite(labelText, maxM);
+                const pillH = labelSprite.userData.pillH;
+
+                // If this figure sits close to already-labelled figures (in ground
+                // position and height), push its label up to the next free tier
+                let tier = 0;
+                const clusterDist = maxM * 0.24;
+                placedLabels.forEach(p => {
+                    if (Math.hypot(px - p.x, pz - p.z) < clusterDist && Math.abs(h - p.h) < pillH * 3) {
+                        tier = Math.max(tier, p.tier + 1);
+                    }
+                });
+                placedLabels.push({ x: px, z: pz, h, tier });
+
+                // Label sits just above the figurine's head (head top ≈ 0.87 * size)
+                const labelY = 0.9 * fig.size + 0.25 + tier * (pillH * 1.35);
+                labelSprite.center.set(0.5, 0);
+                labelSprite.position.y = labelY;
+                visuals.add(labelSprite);
+
+                // Thin leader line from just above the head up to its label
+                const leader = new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(0, 0.88 * fig.size + 0.04, 0),
+                        new THREE.Vector3(0, labelY + 0.02, 0)
+                    ]),
+                    new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5, depthTest: false })
+                );
+                leader.renderOrder = 998;
+                visuals.add(leader);
+
+                figuresGroup.add(group);
+            });
+        }
+
+        function selectFigure(id) {
+            selectedId = id;
+            renderUI();
+        }
+
+        function startRename(id) {
+            renamingId = id;
+            if (selectedId !== id) selectedId = id;
+            renderUI();
+        }
+
+        // ---------- PNG EXPORT ----------
+        function exportTimestamp() {
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+        }
+
+        function saveBlob(blob, filename) {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+        }
+
+        function roundRectPath(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.arcTo(x + w, y, x + w, y + r, r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+            ctx.lineTo(x + r, y + h);
+            ctx.arcTo(x, y + h, x, y + h - r, r);
+            ctx.lineTo(x, y + r);
+            ctx.arcTo(x, y, x + r, y, r);
+            ctx.closePath();
+        }
+
+        // Composites the captured map with an entity legend panel (left) and a
+        // HUD card (top-left of the map), then saves the result as a PNG
+        function composeAndSave(mapSource, mapW, mapH, scale, modeText, filename) {
+            const px = (n) => Math.round(n * scale);
+            const L = px(280);
+            const headerH = px(64);
+            const rowH = px(46);
+            const footerH = px(64);
+            const legendH = headerH + figures.length * rowH + footerH;
+            const W = L + mapW;
+            const H = Math.max(mapH, legendH);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+
+            // Backgrounds
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, W, H);
+            ctx.drawImage(mapSource, L, 0, mapW, mapH);
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, L, H);
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = Math.max(1, px(1));
+            ctx.beginPath(); ctx.moveTo(L - 0.5, 0); ctx.lineTo(L - 0.5, H); ctx.stroke();
+
+            // Legend header
+            ctx.fillStyle = '#0f172a';
+            ctx.font = `700 ${px(15)}px Inter, Helvetica, sans-serif`;
+            ctx.fillText('Spatial Map Pro', px(16), px(28));
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = `700 ${px(9)}px Inter, Helvetica, sans-serif`;
+            ctx.fillText('ENTITIES', px(16), px(52));
+
+            // Entity rows with full positional data
+            const u = worldScale.unit;
+            figures.forEach((fig, i) => {
+                const y = headerH + i * rowH;
+                ctx.fillStyle = fig.color;
+                ctx.beginPath();
+                ctx.arc(px(22), y + px(15), px(5), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#1e293b';
+                ctx.font = `700 ${px(12)}px Inter, Helvetica, sans-serif`;
+                ctx.fillText(fig.name + (fig.isSelf ? ' (You)' : ''), px(34), y + px(19));
+                ctx.fillStyle = '#64748b';
+                ctx.font = `400 ${px(9.5)}px Inter, Helvetica, sans-serif`;
+                ctx.fillText(`dist ${fig.distance}${u} · clock ${fig.clock} · ht ${fig.height}${u} · facing ${fig.rotation}° · size ${fig.size}x`, px(34), y + px(34));
+            });
+
+            // Legend footer: world settings + capture time
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = `400 ${px(9.5)}px Inter, Helvetica, sans-serif`;
+            const fy = headerH + figures.length * rowH + px(22);
+            ctx.fillText(`World boundary: ${worldScale.value} ${worldScale.unit} radius`, px(16), fy);
+            ctx.fillText(`Captured: ${new Date().toLocaleString()}`, px(16), fy + px(16));
+
+            // HUD card over the map, top-left
+            const hudX = L + px(16);
+            const hudY = px(16);
+            ctx.font = `700 ${px(11)}px Inter, Helvetica, sans-serif`;
+            const hudW = Math.max(ctx.measureText(modeText).width, px(80)) + px(30);
+            const hudH = px(48);
+            roundRectPath(ctx, hudX, hudY, hudW, hudH, px(10));
+            ctx.fillStyle = 'rgba(255,255,255,0.92)';
+            ctx.fill();
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = Math.max(1, px(1));
+            ctx.stroke();
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = `800 ${px(8)}px Inter, Helvetica, sans-serif`;
+            ctx.fillText('MAP VIEW', hudX + px(14), hudY + px(18));
+            ctx.fillStyle = '#475569';
+            ctx.font = `700 ${px(11)}px Inter, Helvetica, sans-serif`;
+            ctx.fillText(modeText, hudX + px(14), hudY + px(36));
+
+            canvas.toBlob(blob => { if (blob) saveBlob(blob, filename); }, 'image/png');
+        }
+
+        // Tailwind classes don't travel with a serialized SVG, so bake them in as inline styles
+        function inlineSvgClasses(root) {
+            const map = {
+                'fill-slate-300': ['fill', '#cbd5e1'],
+                'fill-slate-500': ['fill', '#64748b'],
+                'text-[12px]': ['font-size', '12px'],
+                'text-[10px]': ['font-size', '10px'],
+                'font-bold': ['font-weight', '700'],
+                'uppercase': ['text-transform', 'uppercase'],
+                'tracking-tighter': ['letter-spacing', '-0.05em']
+            };
+            root.querySelectorAll('[class]').forEach(el => {
+                const classes = (el.getAttribute('class') || '').split(/\s+/);
+                let style = el.getAttribute('style') || '';
+                classes.forEach(c => { if (map[c]) style += `;${map[c][0]}:${map[c][1]}`; });
+                if (style) el.setAttribute('style', style);
+                el.removeAttribute('class');
+            });
+        }
+
+        function export2DPNG() {
+            const panel = document.getElementById('view-2d');
+            const svgEl = document.getElementById('svg-map');
+            const panelHidden = panel.classList.contains('hide');
+
+            // Capture the whole map panel at the exact proportions shown on screen
+            // (falls back to a square render if the 2D view is currently hidden)
+            const scale = 2;
+            const panelRect = panelHidden ? { width: 800, height: 800, left: 0, top: 0 } : panel.getBoundingClientRect();
+            const svgRect = panelHidden ? { width: 800, height: 800, left: 0, top: 0 } : svgEl.getBoundingClientRect();
+            const W = Math.round(panelRect.width * scale);
+            const H = Math.round(panelRect.height * scale);
+
+            const svg = svgEl.cloneNode(true);
+            svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            svg.setAttribute('width', Math.round(svgRect.width * scale));
+            svg.setAttribute('height', Math.round(svgRect.height * scale));
+            svg.removeAttribute('class');
+            svg.setAttribute('style', "font-family: 'Inter', Helvetica, Arial, sans-serif;");
+
+            inlineSvgClasses(svg);
+
+            const data = new XMLSerializer().serializeToString(svg);
+            const url = URL.createObjectURL(new Blob([data], { type: 'image/svg+xml;charset=utf-8' }));
+            const img = new Image();
+            img.onload = () => {
+                const mapCanvas = document.createElement('canvas');
+                mapCanvas.width = W; mapCanvas.height = H;
+                const ctx = mapCanvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, W, H);
+                // Place the map exactly where it sits within the panel on screen
+                const dx = Math.round((svgRect.left - panelRect.left) * scale);
+                const dy = Math.round((svgRect.top - panelRect.top) * scale);
+                ctx.drawImage(img, dx, dy, Math.round(svgRect.width * scale), Math.round(svgRect.height * scale));
+                URL.revokeObjectURL(url);
+                composeAndSave(mapCanvas, W, H, scale, 'SCHEMATIC 2D', `spatial-map-2d_${exportTimestamp()}.png`);
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); console.error('2D export failed'); };
+            img.src = url;
+        }
+
+        function export3DPNG() {
+            const container = document.getElementById('view-3d');
+            const wasHidden = container.classList.contains('hide');
+
+            // If the 3D view isn't on screen, stage it offscreen at a fixed size so it can render
+            if (wasHidden) {
+                container.classList.remove('hide');
+                container.style.position = 'fixed';
+                container.style.left = '-3000px';
+                container.style.top = '0';
+                container.style.width = '1400px';
+                container.style.height = '1400px';
+            }
+
+            if (!is3DInitialized) init3D();
+            resize3D();
+            buildClockFace();
+            update3D();
+            applyScreenSpaceScaling();
+            renderer.render(scene, camera);
+
+            const glCanvas = renderer.domElement;
+            const mapW = glCanvas.width;
+            const mapH = glCanvas.height;
+            const scale = Math.min(3, Math.max(1.4, mapH / 520));
+            composeAndSave(glCanvas, mapW, mapH, scale, 'PERSPECTIVE 3D', `spatial-map-3d_${exportTimestamp()}.png`);
+
+            if (wasHidden) {
+                container.classList.add('hide');
+                container.style.position = '';
+                container.style.left = '';
+                container.style.top = '';
+                container.style.width = '';
+                container.style.height = '';
+            }
+        }
+
+        function resize3D() {
+            const container = document.getElementById('view-3d');
+            if (renderer && camera && container && container.clientWidth > 0) {
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+            }
+        }
+
+        function downloadBothPNGs() {
+            try {
+                export2DPNG();
+            } catch (err) {
+                alert('2D export failed: ' + err.message);
+            }
+            // Slight stagger so the browser treats them as two tidy downloads
+            setTimeout(() => {
+                try {
+                    export3DPNG();
+                } catch (err) {
+                    alert('3D export failed: ' + err.message);
+                }
+            }, 700);
+        }
+
+        function handleDelete(id) {
+            figures = figures.filter(f => f.id !== id);
+            if (selectedId === id) selectedId = 'self';
+            renderUI();
+        }
+
+        function resetMap() {
+            // Reverting to initial states
+            figures = [
+                { id: 'self', name: 'Self', distance: 0, clock: 0, height: 0, rotation: 0, size: 1, color: '#3b82f6', isSelf: true }
+            ];
+            notes = [];
+            selectedId = 'self';
+            worldScale = { value: 10, unit: 'm' };
+            
+            // Updating UI elements that aren't reactive
+            document.getElementById('world-scale-val').value = 10;
+            document.getElementById('world-scale-unit').value = 'm';
+            
+            renderUI();
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            const b2 = document.getElementById('btn-2d');
+            const b3 = document.getElementById('btn-3d');
+            const active = "flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all bg-white shadow text-blue-600";
+            const idle = "flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all text-slate-500 hover:text-slate-700";
+            if (mode === '2D') {
+                b2.className = active; b3.className = idle;
+                document.getElementById('view-2d').classList.remove('hide');
+                document.getElementById('view-3d').classList.add('hide');
+                document.getElementById('status-mode').innerHTML = '<i data-lucide="layers" class="w-3 h-3 text-blue-500"></i> Schematic 2D';
+                document.getElementById('status-hint').innerText = 'Drag body to move · drag nose or halo ring to face · drag handle to resize';
+            } else {
+                b3.className = active; b2.className = idle;
+                document.getElementById('view-2d').classList.add('hide');
+                document.getElementById('view-3d').classList.remove('hide');
+                document.getElementById('status-mode').innerHTML = '<i data-lucide="box" class="w-3 h-3 text-blue-500"></i> Perspective 3D';
+                document.getElementById('status-hint').innerText = 'Drag figure to move · ring to face · □ to resize · ↕ for height · orbit empty space';
+                init3D();
+                resize3D();
+            }
+            renderUI();
+        }
+
+        function initApp() {
+            // View Toggles
+            document.getElementById('btn-2d').onclick = () => setViewMode('2D');
+
+            document.getElementById('btn-3d').onclick = () => setViewMode('3D');
+
+            document.getElementById('download-pngs').onclick = downloadBothPNGs;
+
+            document.getElementById('reset-all').onclick = () => {
+                // Simple confirmation to avoid accidental resets
+                resetMap();
+            };
+
+            // Add Entity — opens straight into rename mode so you can type the name
+            document.getElementById('add-figure').onclick = () => {
+                const id = 'fig-' + Date.now();
+                figures.push({
+                    id, name: 'Figure ' + figures.length, distance: 5, clock: 0, height: 0, rotation: 0, size: 1, color: COLORS[figures.length % COLORS.length], isSelf: false
+                });
+                startRename(id);
+            };
+
+            // Add Note — drops a note on the map and focuses its text input
+            document.getElementById('add-note').onclick = () => {
+                const maxM = getInMeters(worldScale.value, worldScale.unit) || 1;
+                const id = 'note-' + Date.now();
+                // Stagger new notes slightly so several added in a row don't stack
+                const offset = (notes.length % 5) * maxM * 0.12;
+                notes.push({ id, text: 'Note ' + (notes.length + 1), wx: -maxM * 0.45 + offset, wz: -maxM * 0.55 });
+                renderUI();
+                setTimeout(() => {
+                    const inp = document.querySelector(`.note-input[data-note-id="${id}"]`);
+                    if (inp) { inp.focus(); inp.select(); }
+                }, 0);
+            };
+
+            // 3D Entity Sizing toggle
+            const sizingBtns = {
+                constant: document.getElementById('btn-sizing-constant'),
+                perspective: document.getElementById('btn-sizing-persp')
+            };
+            const sizingActive = "flex-1 py-1.5 text-xs font-bold rounded-md transition-all bg-white shadow text-blue-600";
+            const sizingIdle = "flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-500 hover:text-slate-700";
+            const setSizing = (mode) => {
+                entitySizing = mode;
+                sizingBtns.constant.className = mode === 'constant' ? sizingActive : sizingIdle;
+                sizingBtns.perspective.className = mode === 'perspective' ? sizingActive : sizingIdle;
+                // The render loop applies the change continuously; nothing to rebuild
+            };
+            sizingBtns.constant.onclick = () => setSizing('constant');
+            sizingBtns.perspective.onclick = () => setSizing('perspective');
+
+            // Input Updates (sliders and fields still work, now via the shared updater)
+            const updateSelected = (updates) => updateFigure(selectedId, updates);
+
+            document.getElementById('input-name').oninput = (e) => updateSelected({ name: e.target.value });
+            document.getElementById('input-dist').oninput = (e) => updateSelected({ distance: parseFloat(e.target.value) || 0 });
+            document.getElementById('input-height').oninput = (e) => updateSelected({ height: parseFloat(e.target.value) || 0 });
+            document.getElementById('input-clock').oninput = (e) => updateSelected({ clock: parseFloat(e.target.value) || 0 });
+            document.getElementById('input-rot').oninput = (e) => updateSelected({ rotation: parseInt(e.target.value) || 0 });
+            document.getElementById('input-size').oninput = (e) => updateSelected({ size: parseFloat(e.target.value) || 1 });
+            document.getElementById('world-scale-val').oninput = (e) => { worldScale.value = parseFloat(e.target.value) || 1; renderUI(); };
+            document.getElementById('world-scale-unit').onchange = (e) => { worldScale.unit = e.target.value; renderUI(); };
+
+            window.addEventListener('resize', () => {
+                if (renderer && camera) {
+                    const container = document.getElementById('view-3d');
+                    renderer.setSize(container.clientWidth, container.clientHeight);
+                    camera.aspect = container.clientWidth / container.clientHeight;
+                    camera.updateProjectionMatrix();
+                }
+            });
+
+            init2DDrag();
+            renderUI();
+        }
+
+        // --- BOOTSTRAP ---
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
