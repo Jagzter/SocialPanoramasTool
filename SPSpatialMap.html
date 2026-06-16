@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Spatial Map Pro 2D/3D</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        body { margin: 0; overflow: hidden; overscroll-behavior: none; font-family: 'Inter', sans-serif; touch-action: none; }
         #view-3d canvas { display: block; border-radius: 1rem; }
         .hide { display: none !important; }
         input[type="range"] { accent-color: #2563eb; }
@@ -31,7 +31,7 @@
                     <h1 class="text-lg font-bold flex items-center gap-2 text-slate-800">
                         <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
                         Spatial Map Pro
-                        <span class="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 tracking-wide">v3.11</span>
+                        <span class="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 tracking-wide">v3.12</span>
                     </h1>
                     <div class="flex items-center gap-1">
                         <button id="download-pngs" title="Download 2D & 3D PNGs" class="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-all">
@@ -97,7 +97,7 @@
                     </button>
                 </div>
                 <div id="notes-list" class="space-y-2"></div>
-                <p class="text-[9px] text-slate-400 mt-2">Max 250 characters · Alt+Enter for a new line · drag notes anywhere on the map</p>
+                <p class="text-[9px] text-slate-400 mt-2">Max 250 characters &middot; Alt+Enter for a new line &middot; drag notes anywhere on the map</p>
             </div>
 
             <!-- Edit Panel -->
@@ -126,7 +126,7 @@
                     <div>
                         <div class="flex justify-between text-[9px] font-bold uppercase text-slate-400 mb-1">
                             <span>Clock (0-12): <span id="label-clock">0</span></span>
-                            <span>Facing: <span id="label-rot">0</span>°</span>
+                            <span>Facing: <span id="label-rot">0</span>&deg;</span>
                         </div>
                         <input type="range" id="input-clock" min="0" max="12" step="0.1" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer mb-2">
                         <input type="range" id="input-rot" min="0" max="360" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer">
@@ -175,7 +175,7 @@
         let figures = [
             { id: 'self', name: 'Self', distance: 0, clock: 0, height: 0, rotation: 0, size: 1, color: '#3b82f6', isSelf: true }
         ];
-        let notes = []; // { id, text (≤25 chars), wx, wz } — world coords in metres, shared by 2D & 3D
+        let notes = []; // { id, text (<=250 chars), wx, wz } - world coords in metres, shared by 2D & 3D
         let selectedId = 'self';
         let viewMode = '2D';
         let worldScale = { value: 10, unit: 'm' };
@@ -340,7 +340,7 @@
                     notesList.appendChild(row);
                 });
                 notesList.querySelectorAll('.note-input').forEach(inp => {
-                    // Update the maps only while typing — rebuilding the sidebar
+                    // Update the maps only while typing - rebuilding the sidebar
                     // mid-keystroke would steal focus from the input
                     inp.oninput = () => {
                         const note = notes.find(n => n.id === inp.dataset.noteId);
@@ -437,7 +437,7 @@
                 }
 
                 // Label placed on the OPPOSITE side to the nose, clear of the body,
-                // halo and size handle — so the nose is always visible and draggable
+                // halo and size handle - so the nose is always visible and draggable
                 const noseDx = Math.sin(fig.rotation * Math.PI / 180);
                 const noseDy = -Math.cos(fig.rotation * Math.PI / 180);
                 const labelR = s + (selectedId === fig.id ? 36 : 20);
@@ -445,7 +445,7 @@
                 const ly = cy - noseDy * labelR;
                 html += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" class="fill-slate-500 font-bold text-[10px] uppercase tracking-tighter" pointer-events="none">${fig.name}</text>`;
 
-                // Size handle on the selection halo (bottom-right) — drag to resize
+                // Size handle on the selection halo (bottom-right) - drag to resize
                 if (selectedId === fig.id) {
                     const hr = s + 15;
                     const hx = cx + hr * Math.cos(Math.PI / 4);
@@ -508,7 +508,7 @@
                 const p = svgPoint(e);
 
                 if (drag.mode === 'note') {
-                    // Note drag → free placement anywhere on the map canvas
+                    // Note drag - free placement anywhere on the map canvas
                     const note = notes.find(n => n.id === drag.noteId);
                     if (!note) { drag = null; return; }
                     const k = pxPerMeter();
@@ -524,7 +524,7 @@
                 if (!fig) { drag = null; return; }
 
                 if (drag.mode === 'move') {
-                    // Position drag → updates Distance + Clock together
+                    // Position drag - updates Distance + Clock together
                     const dx = p.x - 400;
                     const dy = p.y - 400;
                     const distPx = Math.min(Math.hypot(dx, dy), 350);
@@ -534,13 +534,13 @@
                     updateFigure(drag.id, { distance, clock });
 
                 } else if (drag.mode === 'rotate') {
-                    // Nose drag → updates Facing rotation
+                    // Nose drag - updates Facing rotation
                     const c = fig2DCenter(fig);
                     const rotation = Math.round((Math.atan2(p.y - c.y, p.x - c.x) * 180 / Math.PI + 90 + 360) % 360);
                     updateFigure(drag.id, { rotation });
 
                 } else if (drag.mode === 'size') {
-                    // Handle drag → updates Relative Size
+                    // Handle drag - updates Relative Size
                     const c = fig2DCenter(fig);
                     const d = Math.hypot(p.x - c.x, p.y - c.y);
                     const size = Math.max(0.2, Math.min(4, Math.round(((d - 15) / 15) * 10) / 10));
@@ -551,7 +551,11 @@
             const endDrag = () => { drag = null; };
             svg.addEventListener('pointerup', endDrag);
             svg.addEventListener('pointercancel', endDrag);
-            svg.addEventListener('pointerleave', (e) => { if (!svg.hasPointerCapture || !svg.hasPointerCapture(e.pointerId)) endDrag(); });
+            // Only end on leave for mouse; touch/pen rely on pointer capture
+            // and a spurious leave shouldn't abort an in-progress drag.
+            svg.addEventListener('pointerleave', (e) => {
+                if (e.pointerType === 'mouse' && (!svg.hasPointerCapture || !svg.hasPointerCapture(e.pointerId))) endDrag();
+            });
         }
 
         // ---------- SCREEN-SPACE SIZE COMPENSATION ----------
@@ -671,11 +675,11 @@
                         if (selectedId !== id) selectFigure(id);
                         const fig = figures.find(f => f.id === id);
                         if (part === 'lift' || e.altKey) {
-                            drag3D = { id, mode: 'height' };           // lift handle or Alt+drag → height
+                            drag3D = { id, mode: 'height' };           // lift handle or Alt+drag - height
                         } else if (part === 'size') {
-                            drag3D = { id, mode: 'size3d' };           // ring cube → resize
+                            drag3D = { id, mode: 'size3d' };           // ring cube - resize
                         } else if (part === 'rotate') {
-                            drag3D = { id, mode: 'spin' };             // selection ring → point nose at cursor
+                            drag3D = { id, mode: 'spin' };             // selection ring - point nose at cursor
                         } else if (e.shiftKey) {
                             drag3D = { id, mode: 'rotate', startX: e.clientX, startRot: fig.rotation };
                         } else {
@@ -686,14 +690,14 @@
                         return;
                     }
                 }
-                isDragging = true; // empty space → orbit camera
+                isDragging = true; // empty space - orbit camera
             });
 
             container.addEventListener('pointermove', (e) => {
                 if (!drag3D) return;
 
                 if (drag3D.mode === 'note') {
-                    // Note drag → slide along the ground plane
+                    // Note drag - slide along the ground plane
                     const note = notes.find(n => n.id === drag3D.noteId);
                     if (!note) { drag3D = null; return; }
                     setNDC(e);
@@ -714,7 +718,7 @@
                 if (!fig) { drag3D = null; return; }
 
                 if (drag3D.mode === 'move') {
-                    // Drag on the figure's height plane → Distance + Clock
+                    // Drag on the figure's height plane - Distance + Clock
                     setNDC(e);
                     raycaster.setFromCamera(mouseNDC, camera);
                     const h = getInMeters(fig.height, worldScale.unit);
@@ -730,7 +734,7 @@
                         updateFigure(drag3D.id, { distance, clock });
                     }
                 } else if (drag3D.mode === 'height') {
-                    // Vertical drag → Height. Project the pointer onto a camera-facing
+                    // Vertical drag - Height. Project the pointer onto a camera-facing
                     // vertical plane through the figure's ground position, take its Y.
                     setNDC(e);
                     raycaster.setFromCamera(mouseNDC, camera);
@@ -751,8 +755,8 @@
                         updateFigure(drag3D.id, { height });
                     }
                 } else if (drag3D.mode === 'size3d') {
-                    // Size-handle drag → distance from the figure's axis maps to
-                    // Relative Size (handle sits on the ring at radius 0.66 × size)
+                    // Size-handle drag - distance from the figure's axis maps to
+                    // Relative Size (handle sits on the ring at radius 0.66 x size)
                     setNDC(e);
                     raycaster.setFromCamera(mouseNDC, camera);
                     const h = getInMeters(fig.height, worldScale.unit);
@@ -773,7 +777,7 @@
                         updateFigure(drag3D.id, { size });
                     }
                 } else if (drag3D.mode === 'spin') {
-                    // Ring drag → point the nose at the cursor (same feel as 2D nose drag)
+                    // Ring drag - point the nose at the cursor (same feel as 2D nose drag)
                     setNDC(e);
                     raycaster.setFromCamera(mouseNDC, camera);
                     const h = getInMeters(fig.height, worldScale.unit);
@@ -788,25 +792,81 @@
                         updateFigure(drag3D.id, { rotation });
                     }
                 } else {
-                    // Shift + horizontal drag → Facing rotation
+                    // Shift + horizontal drag - Facing rotation
                     const rotation = (((drag3D.startRot + Math.round((e.clientX - drag3D.startX) * 0.5)) % 360) + 360) % 360;
                     updateFigure(drag3D.id, { rotation });
                 }
             });
 
-            const end3DDrag = () => { drag3D = null; isDragging = false; };
+            const end3DDrag = (e) => {
+                if (e && container.hasPointerCapture && container.hasPointerCapture(e.pointerId)) {
+                    try { container.releasePointerCapture(e.pointerId); } catch (err) {}
+                }
+                drag3D = null;
+            };
             container.addEventListener('pointerup', end3DDrag);
             container.addEventListener('pointercancel', end3DDrag);
-            
-            window.addEventListener('mouseup', () => isDragging = false);
-            window.addEventListener('mousemove', (e) => {
-                if (!isDragging || drag3D || viewMode !== '3D') return;
-                theta -= e.movementX * 0.01;
-                phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, phi + e.movementY * 0.01));
-                updateCam();
+
+            // ---------- CAMERA ORBIT + PINCH-ZOOM (pointer-based, works on touch) ----------
+            // Track the last pointer position so we can orbit using pointer
+            // events (mouse movementX/Y is unreliable / absent on touch).
+            let lastOrbitX = 0, lastOrbitY = 0;
+            const activePointers = new Map();
+            let pinchStartDist = null, pinchStartRadius = radius;
+
+            container.addEventListener('pointerdown', (e) => {
+                activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (activePointers.size === 2) {
+                    // Two fingers down - start a pinch; cancel any single-finger orbit/drag
+                    const pts = [...activePointers.values()];
+                    pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                    pinchStartRadius = radius;
+                    isDragging = false;
+                    drag3D = null;
+                } else if (isDragging) {
+                    lastOrbitX = e.clientX;
+                    lastOrbitY = e.clientY;
+                }
             });
+
+            container.addEventListener('pointermove', (e) => {
+                if (activePointers.has(e.pointerId)) {
+                    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                }
+
+                // Pinch-zoom takes priority when two fingers are active
+                if (pinchStartDist !== null && activePointers.size === 2) {
+                    const pts = [...activePointers.values()];
+                    const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                    if (d > 0) {
+                        radius = Math.max(5, Math.min(150, pinchStartRadius * (pinchStartDist / d)));
+                        updateCam();
+                    }
+                    e.preventDefault();
+                    return;
+                }
+
+                if (!isDragging || drag3D || viewMode !== '3D') return;
+                theta -= (e.clientX - lastOrbitX) * 0.01;
+                phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, phi + (e.clientY - lastOrbitY) * 0.01));
+                lastOrbitX = e.clientX;
+                lastOrbitY = e.clientY;
+                updateCam();
+                e.preventDefault();
+            });
+
+            const clearOrbitPointer = (e) => {
+                activePointers.delete(e.pointerId);
+                if (activePointers.size < 2) pinchStartDist = null;
+                if (activePointers.size === 0) isDragging = false;
+            };
+            container.addEventListener('pointerup', clearOrbitPointer);
+            container.addEventListener('pointercancel', clearOrbitPointer);
+            container.addEventListener('pointerleave', clearOrbitPointer);
+
             container.onwheel = (e) => {
                 if (viewMode !== '3D') return;
+                e.preventDefault();
                 radius = Math.max(5, Math.min(150, radius + e.deltaY * 0.05));
                 updateCam();
             };
@@ -968,14 +1028,14 @@
                 return pts;
             };
 
-            // Outer boundary ring (solid) — matches the 2D world boundary circle
+            // Outer boundary ring (solid) - matches the 2D world boundary circle
             const outer = new THREE.Line(
                 new THREE.BufferGeometry().setFromPoints(circlePoints(maxM)),
                 new THREE.LineBasicMaterial({ color: 0xcbd5e1 })
             );
             clockGroup.add(outer);
 
-            // Two inner rings (dashed) — matches the 2D thirds rings
+            // Two inner rings (dashed) - matches the 2D thirds rings
             [maxM * 2 / 3, maxM / 3].forEach(r => {
                 const ring = new THREE.Line(
                     new THREE.BufferGeometry().setFromPoints(circlePoints(r)),
@@ -985,7 +1045,7 @@
                 clockGroup.add(ring);
             });
 
-            // Hour spokes every 30°, with 12/3/6/9 slightly stronger
+            // Hour spokes every 30deg, with 12/3/6/9 slightly stronger
             for (let h = 0; h < 12; h++) {
                 const a = (h * 30) * Math.PI / 180;
                 const x = Math.sin(a), z = -Math.cos(a);
@@ -1014,7 +1074,7 @@
 
         // ---------- 3D HUMANOID FIGURINE ----------
         // Builds a small person from primitives (r128-safe: no CapsuleGeometry).
-        // Local space: feet at y = -0.5*s, top of head ≈ y = +0.87*s, facing -Z.
+        // Local space: feet at y = -0.5*s, top of head ~ y = +0.87*s, facing -Z.
         function buildFigurine(fig) {
             const s = fig.size;
             const isSel = selectedId === fig.id;
@@ -1069,7 +1129,7 @@
 
             // The whole body turns to the Facing value.
             // Negative sign keeps 3D facing consistent with the 2D map
-            // (90° = towards 3 o'clock in both views).
+            // (90deg = towards 3 o'clock in both views).
             figurine.rotation.y = -(fig.rotation * Math.PI) / 180;
             return figurine;
         }
@@ -1133,9 +1193,9 @@
                     ringHit.userData.hitProxy = true;
                     visuals.add(ringHit);
 
-                    // --- Size handle: small cube on the ring (45°) — drag in/out to resize ---
+                    // --- Size handle: small cube on the ring (45deg) - drag in/out to resize ---
                     const sk = fig.size;
-                    const hd = 0.66 * sk * Math.SQRT1_2; // ring radius projected to x/z at 45°
+                    const hd = 0.66 * sk * Math.SQRT1_2; // ring radius projected to x/z at 45deg
                     const sizeHandle = new THREE.Mesh(
                         new THREE.BoxGeometry(0.16 * sk, 0.16 * sk, 0.16 * sk),
                         new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthTest: false })
@@ -1158,7 +1218,7 @@
                         visuals.add(mh);
                     });
 
-                    // --- Lift handle (vertical double-arrow) — drag to change Height ---
+                    // --- Lift handle (vertical double-arrow) - drag to change Height ---
                     const s = fig.size;
                     const gz = new THREE.Group();
                     const gmat = new THREE.MeshBasicMaterial({ color: fig.color, transparent: true, opacity: 0.9, depthTest: false });
@@ -1222,7 +1282,7 @@
                 });
                 placedLabels.push({ x: px, z: pz, h, tier });
 
-                // Label sits just above the figurine's head (head top ≈ 0.87 * size)
+                // Label sits just above the figurine's head (head top ~ 0.87 * size)
                 const labelY = 0.9 * fig.size + 0.25 + tier * (pillH * 1.35);
                 labelSprite.center.set(0.5, 0);
                 labelSprite.position.y = labelY;
@@ -1331,7 +1391,7 @@
                 ctx.fillText(fig.name + (fig.isSelf ? ' (You)' : ''), px(34), y + px(19));
                 ctx.fillStyle = '#64748b';
                 ctx.font = `400 ${px(9.5)}px Inter, Helvetica, sans-serif`;
-                ctx.fillText(`dist ${fig.distance}${u} · clock ${fig.clock} · ht ${fig.height}${u} · facing ${fig.rotation}° · size ${fig.size}x`, px(34), y + px(34));
+                ctx.fillText(`dist ${fig.distance}${u} - clock ${fig.clock} - ht ${fig.height}${u} - facing ${fig.rotation}deg - size ${fig.size}x`, px(34), y + px(34));
             });
 
             // Legend footer: world settings + capture time
@@ -1520,13 +1580,13 @@
                 document.getElementById('view-2d').classList.remove('hide');
                 document.getElementById('view-3d').classList.add('hide');
                 document.getElementById('status-mode').innerHTML = '<i data-lucide="layers" class="w-3 h-3 text-blue-500"></i> Schematic 2D';
-                document.getElementById('status-hint').innerText = 'Drag body to move · drag nose or halo ring to face · drag handle to resize';
+                document.getElementById('status-hint').innerText = 'Drag body to move - drag nose or halo ring to face - drag handle to resize';
             } else {
                 b3.className = active; b2.className = idle;
                 document.getElementById('view-2d').classList.add('hide');
                 document.getElementById('view-3d').classList.remove('hide');
                 document.getElementById('status-mode').innerHTML = '<i data-lucide="box" class="w-3 h-3 text-blue-500"></i> Perspective 3D';
-                document.getElementById('status-hint').innerText = 'Drag figure to move · ring to face · □ to resize · ↕ for height · orbit empty space';
+                document.getElementById('status-hint').innerText = 'Drag figure to move - ring to face - box to resize - arrows for height - 1 finger orbits, 2 fingers pinch-zoom';
                 init3D();
                 resize3D();
             }
@@ -1546,7 +1606,7 @@
                 resetMap();
             };
 
-            // Add Entity — opens straight into rename mode so you can type the name
+            // Add Entity - opens straight into rename mode so you can type the name
             document.getElementById('add-figure').onclick = () => {
                 const id = 'fig-' + Date.now();
                 figures.push({
@@ -1555,7 +1615,7 @@
                 startRename(id);
             };
 
-            // Add Note — drops a note on the map and focuses its text input
+            // Add Note - drops a note on the map and focuses its text input
             document.getElementById('add-note').onclick = () => {
                 const maxM = getInMeters(worldScale.value, worldScale.unit) || 1;
                 const id = 'note-' + Date.now();
@@ -1612,6 +1672,7 @@
 
         // --- BOOTSTRAP ---
         window.addEventListener('DOMContentLoaded', initApp);
+
     </script>
 </body>
 </html>
