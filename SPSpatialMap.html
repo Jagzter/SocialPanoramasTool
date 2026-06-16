@@ -9,29 +9,41 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body { margin: 0; overflow: hidden; overscroll-behavior: none; font-family: 'Inter', sans-serif; touch-action: none; }
+        body { margin: 0; font-family: 'Inter', sans-serif; }
+        /* On desktop the app fills the viewport and never scrolls the page;
+           on mobile the whole page scrolls (controls panel on top, map below). */
+        @media (min-width: 768px) {
+            body { overflow: hidden; overscroll-behavior: none; height: 100vh; }
+        }
         #view-3d canvas { display: block; border-radius: 1rem; }
         .hide { display: none !important; }
         input[type="range"] { accent-color: #2563eb; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); }
         .sidebar-transition { transition: width 0.3s ease; }
-        /* Prevent browser touch gestures from hijacking drags */
+        /* Prevent browser touch gestures from hijacking drags inside the map areas.
+           Scoped to the map (not body) so the page can still scroll on mobile. */
         #svg-map, #view-3d { touch-action: none; }
+        /* Mobile-only sizing: controls expand fully above, map gets a generous
+           fixed area below. Desktop uses the flex row layout instead. */
+        @media (max-width: 767px) {
+            .mobile-viewport { height: auto; }
+            .mobile-map-area { height: 78vh; min-height: 360px; }
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-    <div class="flex flex-col md:flex-row h-screen overflow-hidden">
+    <div class="flex flex-col md:flex-row min-h-screen md:h-screen md:overflow-hidden">
         
         <!-- Sidebar -->
-        <div class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col shadow-lg z-20 h-1/3 md:h-full overflow-y-auto scrollbar-hide">
-            <div class="p-4 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
+        <div class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col shadow-lg z-20 shrink-0 md:h-full md:overflow-y-auto scrollbar-hide">
+            <div class="p-4 border-b border-slate-100 bg-slate-50 md:sticky md:top-0 z-10">
                 <div class="flex justify-between items-center">
                     <h1 class="text-lg font-bold flex items-center gap-2 text-slate-800">
                         <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
                         Spatial Map Pro
-                        <span class="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 tracking-wide">v3.12</span>
+                        <span class="text-[9px] font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 tracking-wide">v3.13</span>
                     </h1>
                     <div class="flex items-center gap-1">
                         <button id="download-pngs" title="Download 2D & 3D PNGs" class="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-all">
@@ -141,7 +153,7 @@
         </div>
 
         <!-- Main Viewport -->
-        <div id="main-viewport" class="flex-1 relative bg-slate-100">
+        <div id="main-viewport" class="mobile-viewport md:flex-1 relative bg-slate-100">
             <!-- HUD -->
             <div class="absolute top-4 left-4 z-10 pointer-events-none">
                 <div class="glass-panel p-3 rounded-xl border border-slate-200 shadow-sm">
@@ -156,7 +168,7 @@
             </div>
 
             <!-- 2D View (SVG) -->
-            <div id="view-2d" class="w-full h-full flex items-center justify-center p-8 bg-white">
+            <div id="view-2d" class="mobile-map-area w-full md:h-full flex items-center justify-center p-4 md:p-8 bg-white">
                 <svg id="svg-map" viewBox="0 0 800 800" class="w-full h-full max-w-[800px] max-h-[800px]">
                     <g id="svg-grid"></g>
                     <g id="svg-figures"></g>
@@ -164,7 +176,7 @@
             </div>
 
             <!-- 3D View (Three.js) -->
-            <div id="view-3d" class="w-full h-full hide cursor-grab active:cursor-grabbing"></div>
+            <div id="view-3d" class="mobile-map-area w-full md:h-full hide cursor-grab active:cursor-grabbing"></div>
         </div>
     </div>
 
